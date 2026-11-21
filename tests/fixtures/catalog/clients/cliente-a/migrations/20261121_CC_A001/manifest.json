@@ -1,0 +1,22 @@
+{
+  "migration_id": "20261121_CC_A001",
+  "change_id": "CC-A001",
+  "product_id": "sistema-erp",
+  "description": "Add LoyaltyTier column to dbo.Customers for Cliente A",
+  "engine": "sqlserver",
+  "scope": "client",
+  "client_id": "cliente-a",
+  "dependencies": [
+    "20261121_BASE_001"
+  ],
+  "up_scripts": [
+    {
+      "path": "up/001_add_loyalty_column.sql"
+    }
+  ],
+  "down_scripts": [],
+  "affected_objects": [
+    "dbo.Customers"
+  ],
+  "destructive": false
+}

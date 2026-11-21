@@ -1,0 +1,22 @@
+{
+  "client_id": "cliente-b",
+  "client_name": "Cliente B (Digiflow Logistics)",
+  "product_id": "sistema-erp",
+  "baseline_version": "v1",
+  "approved_product_migrations": [
+    "20261121_BASE_001"
+  ],
+  "approved_client_migrations": [
+    "20261121_CC_B001"
+  ],
+  "environments": [
+    {
+      "environment": "DEV",
+      "database_name": "DEMO_CLIENTE_B_DEV"
+    },
+    {
+      "environment": "PROD",
+      "database_name": "CLIENTE_B_PROD"
+    }
+  ]
+}

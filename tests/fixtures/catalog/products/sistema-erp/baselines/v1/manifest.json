@@ -1,0 +1,24 @@
+{
+  "product_id": "sistema-erp",
+  "version": "v1",
+  "engine": "sqlserver",
+  "state": "validated",
+  "description": "ERP v1.0 Baseline (Core tables, views, stored procedures, and system master data)",
+  "schema_scripts": [
+    {
+      "path": "schema/001_core_tables.sql",
+      "description": "Core ERP tables: Customers, Invoices, SystemConfig"
+    },
+    {
+      "path": "schema/002_programmable_objects.sql",
+      "description": "Core ERP views and stored procedures: vw_ActiveCustomers, usp_IssueInvoice"
+    }
+  ],
+  "master_data_scripts": [
+    {
+      "path": "master-data/001_seed_master_data.sql",
+      "description": "Idempotent MERGE of system tax and currency configuration",
+      "master_data_policy": "system_owned"
+    }
+  ]
+}

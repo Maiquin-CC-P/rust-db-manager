@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <title>RustDB Manager — Database Baseline, Copy &amp; Drift Studio</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+
+      --bg-canvas-light: #f4f6f9;
+      --bg-canvas-dark: #0d1117;
+      --bg-surface-light: #ffffff;
+      --bg-surface-dark: #161b22;
+      --bg-elevated-light: #eef2f7;
+      --bg-elevated-dark: #21262d;
+
+      --text-primary-light: #1f2328;
+      --text-primary-dark: #e6edf3;
+      --text-muted-light: #59636e;
+      --text-muted-dark: #8b949e;
+
+      --border-light: #d0d7de;
+      --border-dark: #30363d;
+
+      --brand-light: #0969da;
+      --brand-dark: #4493f8;
+      --brand-contrast: #ffffff;
+
+      --critical-light: #cf222e;
+      --critical-dark: #f85149;
+      --warning-light: #9a6700;
+      --warning-dark: #d29922;
+      --success-light: #1a7f37;
+      --success-dark: #3fb950;
+
+      --bg-canvas: var(--bg-canvas-light);
+      --bg-surface: var(--bg-surface-light);
+      --bg-elevated: var(--bg-elevated-light);
+      --text-primary: var(--text-primary-light);
+      --text-muted: var(--text-muted-light);
+      --border-color: var(--border-light);
+      --brand: var(--brand-light);
+      --critical: var(--critical-light);
+      --warning: var(--warning-light);
+      --success: var(--success-light);
+
+      @media (prefers-color-scheme: dark) {
+        --bg-canvas: var(--bg-canvas-dark);
+        --bg-surface: var(--bg-surface-dark);
+        --bg-elevated: var(--bg-elevated-dark);
+        --text-primary: var(--text-primary-dark);
+        --text-muted: var(--text-muted-dark);
+        --border-color: var(--border-dark);
+        --brand: var(--brand-dark);
+        --critical: var(--critical-dark);
+        --warning: var(--warning-dark);
+        --success: var(--success-dark);
+      }
+
+      @supports (color: light-dark(white, black)) {
+        --bg-canvas: light-dark(var(--bg-canvas-light), var(--bg-canvas-dark));
+        --bg-surface: light-dark(var(--bg-surface-light), var(--bg-surface-dark));
+        --bg-elevated: light-dark(var(--bg-elevated-light), var(--bg-elevated-dark));
+        --text-primary: light-dark(var(--text-primary-light), var(--text-primary-dark));
+        --text-muted: light-dark(var(--text-muted-light), var(--text-muted-dark));
+        --border-color: light-dark(var(--border-light), var(--border-dark));
+        --brand: light-dark(var(--brand-light), var(--brand-dark));
+        --critical: light-dark(var(--critical-light), var(--critical-dark));
+        --warning: light-dark(var(--warning-light), var(--warning-dark));
+        --success: light-dark(var(--success-light), var(--success-dark));
+      }
+
+      accent-color: var(--brand);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background-color: var(--bg-canvas);
+      color: var(--text-primary);
+      line-height: 1.5;
+    }
+
+    header.topbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.85rem 1.5rem;
+      background-color: var(--bg-surface);
+      border-block-end: 1px solid var(--border-color);
+    }
+
+    .brand-title {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-weight: 700;
+      font-size: 1.15rem;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.55rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border: 1px solid var(--border-color);
+      background-color: var(--bg-elevated);
+    }
+
+    .badge.ok {
+      color: var(--success);
+      border-color: var(--success);
+    }
+
+    .badge.critical {
+      color: var(--critical);
+      border-color: var(--critical);
+    }
+
+    .badge.warning {
+      color: var(--warning);
+      border-color: var(--warning);
+    }
+
+    .profile-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      flex-wrap: wrap;
+    }
+
+    select, input[type="text"], button {
+      font: inherit;
+      padding: 0.45rem 0.75rem;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background-color: var(--bg-surface);
+      color: var(--text-primary);
+    }
+
+    button {
+      cursor: pointer;
+      font-weight: 600;
+      background-color: var(--bg-elevated);
+    }
+
+    button.primary {
+      background-color: var(--brand);
+      color: var(--brand-contrast);
+      border-color: var(--brand);
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    main.container {
+      max-inline-size: 1360px;
+      margin-inline: auto;
+      padding: 1.25rem 1.5rem 3rem;
+    }
+
+    /* Accessible Tablist following Modern Web Guidance */
+    .tablist {
+      display: flex;
+      overflow-x: auto;
+      border-block-end: 1px solid var(--border-color);
+      margin-block-end: 1.25rem;
+      gap: 0.25rem;
+    }
+
+    [role="tab"] {
+      position: relative;
+      flex: none;
+      border: none;
+      background: transparent;
+      padding: 0.75rem 1.15rem;
+      color: var(--text-muted);
+      border-radius: 6px 6px 0 0;
+    }
+
+    [role="tab"][aria-selected="true"] {
+      color: var(--brand);
+
+      &::after {
+        content: "";
+        position: absolute;
+        inset: auto 0 0;
+        border-block-end: 3px solid var(--brand);
+      }
+    }
+
+    .panel-box {
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 1.25rem;
+      margin-block-end: 1.25rem;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1.25rem;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      margin-block-end: 0.9rem;
+    }
+
+    .form-group label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    /* Responsive Table with Sticky Headers & Container Query */
+    .table-wrapper {
+      overflow: auto;
+      max-inline-size: 100%;
+      max-block-size: min(520px, 75vh);
+      container-type: inline-size;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+    }
+
+    table {
+      inline-size: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 0.9rem;
+    }
+
+    caption {
+      text-align: start;
+      padding: 0.65rem 0.9rem;
+      font-weight: 700;
+      background-color: var(--bg-elevated);
+      border-block-end: 1px solid var(--border-color);
+    }
+
+    thead {
+      position: sticky;
+      inset-block-start: 0;
+      z-index: 2;
+      background-color: var(--bg-elevated);
+    }
+
+    th, td {
+      text-align: start;
+      padding: 0.6rem 0.85rem;
+      border-block-end: 1px solid var(--border-color);
+      vertical-align: top;
+    }
+
+    tbody th {
+      position: sticky;
+      inset-inline-start: 0;
+      z-index: 1;
+      background-color: var(--bg-surface);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    @container (width < 600px) {
+      table, thead, tbody, tr, th, td {
+        display: block;
+      }
+      thead {
+        display: none;
+      }
+      tr {
+        margin-block-end: 1rem;
+        border-block-end: 2px solid var(--border-color);
+      }
+      tbody th {
+        position: sticky;
+        inset-block-start: 0;
+        background-color: var(--bg-elevated);
+      }
+    }
+
+    pre.code-diff {
+      color-scheme: dark;
+      accent-color: var(--brand);
+      background-color: #0d1117;
+      color: #e6edf3;
+      padding: 0.85rem;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 0.82rem;
+      margin: 0.5rem 0 0;
+      border: 1px solid #30363d;
+    }
+
+    .status-toast {
+      padding: 0.75rem 1rem;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background-color: var(--bg-elevated);
+      margin-block-end: 1rem;
+      font-size: 0.9rem;
+    }
+
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 0.85rem;
+      margin-block-end: 1.25rem;
+    }
+
+    .kpi-card {
+      padding: 0.85rem 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background-color: var(--bg-elevated);
+    }
+
+    .kpi-card .num {
+      font-size: 1.6rem;
+      font-weight: 800;
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand-title">
+      <span>RustDB Manager</span>
+      <span class="badge">v0.1 Hybrid Engine</span>
+      <span id="connStatusBadge" class="badge">Checking connection...</span>
+    </div>
+    <div class="profile-bar">
+      <label for="profileSelect" style="font-size:0.85rem;font-weight:600;">Connection Profile:</label>
+      <select id="profileSelect"></select>
+      <button type="button" id="btnTestConn">Test Connection</button>
+      <button type="button" id="btnRefreshAll">Refresh Databases</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="globalToast" class="status-toast" hidden></div>
+
+    <div class="tablist" role="tablist" focusgroup="tablist nomemory" aria-label="RustDB Manager Workspace">
+      <button type="button" role="tab" id="tab-compare" aria-selected="true" focusgroupstart>1. Compare &amp; Contamination Audit</button>
+      <button type="button" role="tab" id="tab-copy">2. Copy &amp; Clone Database</button>
+      <button type="button" role="tab" id="tab-baseline">3. Build Clean Baseline / Client DB</button>
+      <button type="button" role="tab" id="tab-inspect">4. Live Databases &amp; Schema Inspector</button>
+    </div>
+
+    <!-- PANEL 1: COMPARE & DRIFT AUDIT -->
+    <div role="tabpanel" id="panel-compare" aria-labelledby="tab-compare" tabindex="0">
+      <div class="panel-box">
+        <h2 style="margin-block-start:0;">Compare Structure &amp; Detect Cross-Client Contamination</h2>
+        <div class="grid-2">
+          <div>
+            <div class="form-group">
+              <label for="cmpSourceDb">Source Reference Database (e.g. PROD_BASE):</label>
+              <input type="text" id="cmpSourceDb" list="dbListDatalist" placeholder="DEMO_PROD_BASE" value="DEMO_PROD_BASE" />
+            </div>
+            <div class="form-group">
+              <label for="cmpTargetDb">Target Database to Audit (e.g. CLIENTE_A_DB):</label>
+              <input type="text" id="cmpTargetDb" list="dbListDatalist" placeholder="DEMO_CLIENTE_A" value="DEMO_CLIENTE_A" />
+            </div>
+          </div>
+          <div>
+            <div class="form-group">
+              <label for="cmpProduct">Product ID in Catalog:</label>
+              <select id="cmpProduct"></select>
+            </div>
+            <div class="form-group">
+              <label for="cmpClient">Target Client Scope (detects contamination from other clients):</label>
+              <select id="cmpClient"></select>
+            </div>
+          </div>
+        </div>
+        <button type="button" class="primary" id="btnRunCompare">Run Structure Comparison &amp; Drift Audit</button>
+      </div>
+
+      <div id="compareResultContainer" class="panel-box" hidden>
+        <div id="compareKpis" class="kpi-row"></div>
+        <div tabindex="0" role="region" aria-labelledby="diff-table-caption" class="table-wrapper">
+          <table>
+            <caption id="diff-table-caption">Classified Schema Differences &amp; Drift Report</caption>
+            <thead>
+              <tr>
+                <th>Object</th>
+                <th>Type</th>
+                <th>Classification</th>
+                <th>Attribution</th>
+                <th>Details &amp; Unified Code Diff</th>
+              </tr>
+            </thead>
+            <tbody id="compareDiffTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANEL 2: COPY & CLONE DATABASE -->
+    <div role="tabpanel" id="panel-copy" aria-labelledby="tab-copy" hidden="until-found">
+      <div class="panel-box">
+        <h2 style="margin-block-start:0;">Copy or Clone a Database</h2>
+        <p style="color:var(--text-muted);margin-block-start:0;">
+          Create a physical copy via <code>BACKUP DATABASE ... WITH COPY_ONLY</code> + <code>RESTORE ... WITH MOVE</code>, or extract a schema-only clone via DACPAC.
+        </p>
+        <div class="grid-2">
+          <div>
+            <div class="form-group">
+              <label for="copyMode">Copy Modality:</label>
+              <select id="copyMode">
+                <option value="backup-restore">Physical Backup &amp; Restore (Structure + Data, COPY_ONLY)</option>
+                <option value="schema-clone">Schema-Only Clone (via SqlPackage DACPAC)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="copySourceDb">Source Database:</label>
+              <input type="text" id="copySourceDb" list="dbListDatalist" placeholder="DEMO_CLIENTE_A" />
+            </div>
+          </div>
+          <div>
+            <div class="form-group">
+              <label for="copyTargetDb">Target New Database Name:</label>
+              <input type="text" id="copyTargetDb" placeholder="DEMO_CLIENTE_A_COPY" />
+            </div>
+            <div class="form-group">
+              <label for="copyClientTag">Optional Client Metadata Stamp:</label>
+              <select id="copyClientTag"></select>
+            </div>
+          </div>
+        </div>
+        <button type="button" class="primary" id="btnRunCopy">Execute Database Copy</button>
+      </div>
+    </div>
+
+    <!-- PANEL 3: BUILD CLEAN BASELINE -->
+    <div role="tabpanel" id="panel-baseline" aria-labelledby="tab-baseline" hidden="until-found">
+      <div class="panel-box">
+        <h2 style="margin-block-start:0;">Build Clean Database from Baseline + Client Overlay</h2>
+        <p style="color:var(--text-muted);margin-block-start:0;">
+          Reconstructs a 100% clean database from versioned scripts and master data, applying only migrations authorized for the selected client.
+        </p>
+        <div class="grid-2">
+          <div>
+            <div class="form-group">
+              <label for="buildProduct">Product:</label>
+              <select id="buildProduct"></select>
+            </div>
+            <div class="form-group">
+              <label for="buildVersion">Baseline Version:</label>
+              <input type="text" id="buildVersion" value="v1" />
+            </div>
+            <div class="form-group">
+              <label for="buildClient">Client Profile (leave on NONE for pure Product Baseline):</label>
+              <select id="buildClient"></select>
+            </div>
+          </div>
+          <div>
+            <div class="form-group">
+              <label for="buildTargetDb">Target Database Name to Create / Rebuild:</label>
+              <input type="text" id="buildTargetDb" value="DEMO_CLIENTE_A" />
+            </div>
+            <div class="form-group" style="flex-direction:row;align-items:center;gap:0.5rem;margin-block-start:1.4rem;">
+              <input type="checkbox" id="buildDropExisting" checked />
+              <label for="buildDropExisting" style="margin:0;color:var(--text-primary);">Drop &amp; Recreate if database already exists</label>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
+          <button type="button" id="btnValidateBaseline">Validate Hashes &amp; DAG Offline</button>
+          <button type="button" class="primary" id="btnRunBuild">Build Clean Database on SQL Server</button>
+        </div>
+        <pre id="baselineOutputLog" class="code-diff" hidden></pre>
+      </div>
+    </div>
+
+    <!-- PANEL 4: LIVE DATABASES & SCHEMA INSPECTOR -->
+    <div role="tabpanel" id="panel-inspect" aria-labelledby="tab-inspect" hidden="until-found">
+      <div class="panel-box">
+        <h2 style="margin-block-start:0;">Live Databases &amp; Schema Inventory Inspector</h2>
+        <div style="display:flex;gap:0.75rem;align-items:flex-end;flex-wrap:wrap;margin-block-end:1rem;">
+          <div class="form-group" style="margin:0;min-inline-size:280px;">
+            <label for="inspectDbName">Select Database to Inspect:</label>
+            <input type="text" id="inspectDbName" list="dbListDatalist" placeholder="Select or type database name" />
+          </div>
+          <button type="button" class="primary" id="btnRunInspect">Inspect Tables, SPs &amp; History</button>
+        </div>
+
+        <div id="inspectResultBox" hidden>
+          <div id="inspectMetaSummary" class="status-toast"></div>
+          <div tabindex="0" role="region" aria-labelledby="inv-table-caption" class="table-wrapper">
+            <table>
+              <caption id="inv-table-caption">Database Objects &amp; Applied Migration History</caption>
+              <thead>
+                <tr>
+                  <th>Object / Migration</th>
+                  <th>Category</th>
+                  <th>Details / SHA-256</th>
+                </tr>
+              </thead>
+              <tbody id="inspectTbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <datalist id="dbListDatalist"></datalist>
+  </main>
+
+  <script>
+    const tabs = Array.from(document.querySelectorAll('[role="tab"]'));
+    const panels = Array.from(document.querySelectorAll('[role="tabpanel"]'));
+
+    function selectTab(selectedTab) {
+      for (const tab of tabs) {
+        const isSelected = tab === selectedTab;
+        tab.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+        tab.toggleAttribute('focusgroupstart', isSelected);
+      }
+      for (const panel of panels) {
+        const isMatch = panel.getAttribute('aria-labelledby') === selectedTab.id;
+        if (isMatch) {
+          panel.removeAttribute('hidden');
+          panel.setAttribute('tabindex', '0');
+        } else {
+          panel.setAttribute('hidden', 'until-found');
+          panel.removeAttribute('tabindex');
+        }
+      }
+    }
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => selectTab(tab));
+    });
+
+    panels.forEach(panel => {
+      panel.addEventListener('beforematch', () => {
+        const tab = document.getElementById(panel.getAttribute('aria-labelledby'));
+        if (tab) selectTab(tab);
+      });
+    });
+
+    function showToast(msg, isError = false) {
+      const el = document.getElementById('globalToast');
+      el.hidden = false;
+      el.style.borderColor = isError ? 'var(--critical)' : 'var(--brand)';
+      el.textContent = msg;
+    }
+
+    async function apiGet(url) {
+      const res = await fetch(url);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Request failed');
+      return data;
+    }
+
+    async function apiPost(url, body) {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Request failed');
+      return data;
+    }
+
+    async function loadInitialState() {
+      try {
+        const status = await apiGet('/api/status');
+        const profSelect = document.getElementById('profileSelect');
+        profSelect.innerHTML = '';
+        status.profiles.forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p;
+          opt.textContent = p;
+          if (p === status.default_profile) opt.selected = true;
+          profSelect.appendChild(opt);
+        });
+
+        const prodSelects = [document.getElementById('cmpProduct'), document.getElementById('buildProduct')];
+        prodSelects.forEach(sel => {
+          sel.innerHTML = '';
+          status.products.forEach(prod => {
+            const opt = document.createElement('option');
+            opt.value = prod;
+            opt.textContent = prod;
+            sel.appendChild(opt);
+          });
+        });
+
+        const clientSelects = [
+          document.getElementById('cmpClient'),
+          document.getElementById('buildClient'),
+          document.getElementById('copyClientTag')
+        ];
+        clientSelects.forEach(sel => {
+          sel.innerHTML = '<option value="">-- NONE (Pure Baseline) --</option>';
+          status.clients.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c;
+            opt.textContent = c;
+            sel.appendChild(opt);
+          });
+        });
+        if (status.clients.includes('cliente-a')) {
+          document.getElementById('cmpClient').value = 'cliente-a';
+        }
+
+        await testAndLoadDatabases();
+      } catch (err) {
+        showToast('Initialization error: ' + err.message, true);
+      }
+    }
+
+    async function testAndLoadDatabases() {
+      const profile = document.getElementById('profileSelect').value;
+      const badge = document.getElementById('connStatusBadge');
+      try {
+        const data = await apiGet(`/api/databases?profile=${encodeURIComponent(profile)}`);
+        badge.className = 'badge ok';
+        badge.textContent = `Connected (${data.databases.length} DBs)`;
+
+        const dl = document.getElementById('dbListDatalist');
+        dl.innerHTML = '';
+        data.databases.forEach(db => {
+          const opt = document.createElement('option');
+          opt.value = db;
+          dl.appendChild(opt);
+        });
+        if (data.databases.length > 0 && !document.getElementById('inspectDbName').value) {
+          document.getElementById('inspectDbName').value = data.databases[0];
+        }
+      } catch (err) {
+        badge.className = 'badge critical';
+        badge.textContent = 'Connection Failed';
+        showToast(`Profile '${profile}': ${err.message}`, true);
+      }
+    }
+
+    document.getElementById('btnTestConn').addEventListener('click', async () => {
+      const profile = document.getElementById('profileSelect').value;
+      try {
+        const res = await apiGet(`/api/connection/test?profile=${encodeURIComponent(profile)}`);
+        showToast(`Connected to ${profile}: ${res.server_version}`);
+        await testAndLoadDatabases();
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    });
+
+    document.getElementById('btnRefreshAll').addEventListener('click', testAndLoadDatabases);
+    document.getElementById('profileSelect').addEventListener('change', testAndLoadDatabases);
+
+    document.getElementById('btnValidateBaseline').addEventListener('click', async () => {
+      const logBox = document.getElementById('baselineOutputLog');
+      try {
+        const res = await apiPost('/api/baseline/validate', {
+          product: document.getElementById('buildProduct').value,
+          version: document.getElementById('buildVersion').value,
+          client: document.getElementById('buildClient').value || null
+        });
+        logBox.hidden = false;
+        logBox.textContent = res.log;
+        showToast('Baseline hashes and migration DAG validated offline.');
+      } catch (err) {
+        logBox.hidden = false;
+        logBox.textContent = 'VALIDATION FAILED:\n' + err.message;
+        showToast(err.message, true);
+      }
+    });
+
+    document.getElementById('btnRunBuild').addEventListener('click', async () => {
+      const btn = document.getElementById('btnRunBuild');
+      const logBox = document.getElementById('baselineOutputLog');
+      btn.disabled = true;
+      try {
+        const res = await apiPost('/api/baseline/build', {
+          profile: document.getElementById('profileSelect').value,
+          product: document.getElementById('buildProduct').value,
+          version: document.getElementById('buildVersion').value,
+          client: document.getElementById('buildClient').value || null,
+          database: document.getElementById('buildTargetDb').value,
+          drop_if_exists: document.getElementById('buildDropExisting').checked
+        });
+        logBox.hidden = false;
+        logBox.textContent = res.log;
+        showToast(res.message);
+        await testAndLoadDatabases();
+      } catch (err) {
+        logBox.hidden = false;
+        logBox.textContent = 'BUILD ERROR:\n' + err.message;
+        showToast(err.message, true);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    document.getElementById('btnRunCopy').addEventListener('click', async () => {
+      const btn = document.getElementById('btnRunCopy');
+      btn.disabled = true;
+      try {
+        const res = await apiPost('/api/db/copy', {
+          profile: document.getElementById('profileSelect').value,
+          mode: document.getElementById('copyMode').value,
+          source: document.getElementById('copySourceDb').value,
+          target: document.getElementById('copyTargetDb').value,
+          client: document.getElementById('copyClientTag').value || null
+        });
+        showToast(`${res.message} (${res.provenance})`);
+        await testAndLoadDatabases();
+      } catch (err) {
+        showToast(err.message, true);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    document.getElementById('btnRunCompare').addEventListener('click', async () => {
+      const btn = document.getElementById('btnRunCompare');
+      btn.disabled = true;
+      try {
+        const report = await apiPost('/api/compare', {
+          profile: document.getElementById('profileSelect').value,
+          source: document.getElementById('cmpSourceDb').value,
+          target: document.getElementById('cmpTargetDb').value,
+          product: document.getElementById('cmpProduct').value,
+          client: document.getElementById('cmpClient').value || null
+        });
+
+        const container = document.getElementById('compareResultContainer');
+        container.hidden = false;
+
+        const kpis = document.getElementById('compareKpis');
+        kpis.innerHTML = `
+          <div class="kpi-card"><div>Total Differences</div><div class="num">${report.summary.total_differences}</div></div>
+          <div class="kpi-card"><div>Explained by Migrations</div><div class="num" style="color:var(--success)">${report.summary.explained_changes}</div></div>
+          <div class="kpi-card"><div>Client Contaminations</div><div class="num" style="color:var(--critical)">${report.summary.cross_client_contaminations}</div></div>
+          <div class="kpi-card"><div>Unexplained Manual Drift</div><div class="num" style="color:var(--warning)">${report.summary.unexplained_manual_drifts}</div></div>
+          <div class="kpi-card"><div>Deployment Gate</div><div class="num" style="font-size:1.1rem;color:${report.summary.is_clean_for_deployment ? 'var(--success)' : 'var(--critical)'}">${report.summary.is_clean_for_deployment ? 'PASS (CLEAN)' : 'BLOCKED'}</div></div>
+        `;
+
+        const tbody = document.getElementById('compareDiffTbody');
+        tbody.innerHTML = '';
+
+        if (report.differences.length === 0) {
+          tbody.innerHTML = '<tr><th colspan="5">No differences found. Source and Target schemas are 100% identical.</th></tr>';
+        } else {
+          for (const d of report.differences) {
+            const tr = document.createElement('tr');
+            let badgeClass = 'badge';
+            if (d.classification === 'CROSS_CLIENT_CONTAMINATION') badgeClass = 'badge critical';
+            else if (d.classification === 'UNEXPLAINED_MANUAL_DRIFT') badgeClass = 'badge warning';
+            else if (d.classification === 'EXPLAINED_BY_MIGRATION') badgeClass = 'badge ok';
+
+            const detailsHtml = d.details.map(item => `<div>• ${escapeHtml(item)}</div>`).join('');
+            const diffHtml = d.unified_diff ? `<pre class="code-diff">${escapeHtml(d.unified_diff)}</pre>` : '';
+
+            tr.innerHTML = `
+              <th>${escapeHtml(d.object_name)}</th>
+              <td>${escapeHtml(d.object_type)}</td>
+              <td><span class="${badgeClass}">${escapeHtml(d.classification)}</span></td>
+              <td>${escapeHtml(d.attributed_migration_id || 'UNTRACKED')} ${d.attributed_client_id ? '(' + escapeHtml(d.attributed_client_id) + ')' : ''}</td>
+              <td><strong>${escapeHtml(d.summary)}</strong>${detailsHtml}${diffHtml}</td>
+            `;
+            tbody.appendChild(tr);
+          }
+        }
+        showToast(`Comparison finished: ${report.summary.total_differences} difference(s) analyzed.`);
+      } catch (err) {
+        showToast(err.message, true);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    document.getElementById('btnRunInspect').addEventListener('click', async () => {
+      const profile = document.getElementById('profileSelect').value;
+      const database = document.getElementById('inspectDbName').value;
+      try {
+        const inv = await apiGet(`/api/schema/inspect?profile=${encodeURIComponent(profile)}&database=${encodeURIComponent(database)}`);
+        document.getElementById('inspectResultBox').hidden = false;
+        const meta = inv.instance_meta;
+        document.getElementById('inspectMetaSummary').textContent = meta
+          ? `Instance Metadata — Product: ${meta.product_id}@${meta.baseline_version} | Client: ${meta.client_id || 'NONE'} | Origin: ${meta.origin_mode} | Trust: ${meta.trust_level}`
+          : `Database '${inv.database_name}' has no __rustdb_instance_meta table (Untracked / Legacy database).`;
+
+        const tbody = document.getElementById('inspectTbody');
+        tbody.innerHTML = '';
+
+        Object.values(inv.tables).forEach(t => {
+          const cols = Object.values(t.columns).map(c => `${c.name} (${c.data_type})`).join(', ');
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<th>${escapeHtml(t.schema_name)}.${escapeHtml(t.table_name)}</th><td>TABLE</td><td>Columns: ${escapeHtml(cols)}</td>`;
+          tbody.appendChild(tr);
+        });
+
+        Object.values(inv.programmable_objects).forEach(p => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<th>${escapeHtml(p.schema_name)}.${escapeHtml(p.object_name)}</th><td>${escapeHtml(p.kind)}</td><td>Semantic SHA-256: <code>${escapeHtml(p.semantic_sha256.slice(0, 16))}...</code></td>`;
+          tbody.appendChild(tr);
+        });
+
+        inv.applied_migrations.forEach(m => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<th>${escapeHtml(m.migration_id)}</th><td>MIGRATION (${escapeHtml(m.scope)})</td><td>Script: ${escapeHtml(m.script_path)} | SHA-256: <code>${escapeHtml(m.checksum_sha256.slice(0, 16))}...</code></td>`;
+          tbody.appendChild(tr);
+        });
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    });
+
+    function escapeHtml(str) {
+      return String(str)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;');
+    }
+
+    loadInitialState();
+  </script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "migration_id": "20261121_CC_A002",
+  "change_id": "CC-A002",
+  "product_id": "sistema-erp",
+  "description": "Customize usp_IssueInvoice for Cliente A to log invoice issuance into AuditLog",
+  "engine": "sqlserver",
+  "scope": "client",
+  "client_id": "cliente-a",
+  "dependencies": [
+    "20261121_CC_A001"
+  ],
+  "up_scripts": [
+    {
+      "path": "up/001_alter_usp_issue_invoice.sql"
+    }
+  ],
+  "down_scripts": [],
+  "affected_objects": [
+    "dbo.usp_IssueInvoice"
+  ],
+  "destructive": false
+}

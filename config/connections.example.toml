@@ -1,0 +1,31 @@
+# RustDB Manager — Connection Profiles Example
+# Copy this file to `config/connections.toml` and set passwords via environment variables.
+# NEVER commit plaintext passwords to Git.
+
+[profiles.local]
+engine = "sqlserver"
+host = "localhost"
+port = 1433
+database = "master"
+user = "sa"
+password_env = "RUSTDB_SQL_PASSWORD"
+trust_server_certificate = true
+integrated_auth = false
+
+[profiles.local_windows_auth]
+engine = "sqlserver"
+host = "localhost"
+port = 1433
+database = "master"
+trust_server_certificate = true
+integrated_auth = true
+
+[profiles.local_mysql]
+engine = "mysql"
+host = "localhost"
+port = 3306
+database = "information_schema"
+user = "root"
+password_env = "RUSTDB_MYSQL_PASSWORD"
+trust_server_certificate = true
+integrated_auth = false

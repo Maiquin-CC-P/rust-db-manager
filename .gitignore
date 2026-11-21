@@ -1,0 +1,8 @@
+/target
+/reports/*.json
+/reports/*.md
+!/reports/.gitkeep
+config/connections.toml
+*.bak
+*.dacpac
+.env

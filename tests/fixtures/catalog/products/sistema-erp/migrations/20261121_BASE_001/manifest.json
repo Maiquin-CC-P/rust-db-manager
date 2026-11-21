@@ -1,0 +1,21 @@
+{
+  "migration_id": "20261121_BASE_001",
+  "change_id": "CC-001",
+  "product_id": "sistema-erp",
+  "description": "Add common AuditLog table across all ERP instances",
+  "engine": "sqlserver",
+  "scope": "product",
+  "client_id": null,
+  "dependencies": [],
+  "up_scripts": [
+    {
+      "path": "up/001_create_audit_log.sql",
+      "description": "Creates dbo.AuditLog table"
+    }
+  ],
+  "down_scripts": [],
+  "affected_objects": [
+    "dbo.AuditLog"
+  ],
+  "destructive": false
+}

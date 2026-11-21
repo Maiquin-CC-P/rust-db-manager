@@ -1,0 +1,23 @@
+{
+  "migration_id": "20261121_CC_B001",
+  "change_id": "CC-B001",
+  "product_id": "sistema-erp",
+  "description": "Create custom DigiflowEndpoints table and sync procedure exclusively for Cliente B",
+  "engine": "sqlserver",
+  "scope": "client",
+  "client_id": "cliente-b",
+  "dependencies": [
+    "20261121_BASE_001"
+  ],
+  "up_scripts": [
+    {
+      "path": "up/018_fix_client_digiflow_urls_up.sql"
+    }
+  ],
+  "down_scripts": [],
+  "affected_objects": [
+    "dbo.DigiflowEndpoints",
+    "dbo.usp_SyncDigiflowBilling"
+  ],
+  "destructive": false
+}

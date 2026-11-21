@@ -1,0 +1,23 @@
+{
+  "client_id": "cliente-a",
+  "client_name": "Cliente A (Retail Corp)",
+  "product_id": "sistema-erp",
+  "baseline_version": "v1",
+  "approved_product_migrations": [
+    "20261121_BASE_001"
+  ],
+  "approved_client_migrations": [
+    "20261121_CC_A001",
+    "20261121_CC_A002"
+  ],
+  "environments": [
+    {
+      "environment": "DEV",
+      "database_name": "DEMO_CLIENTE_A_DEV"
+    },
+    {
+      "environment": "PROD",
+      "database_name": "CLIENTE_A_PROD"
+    }
+  ]
+}
