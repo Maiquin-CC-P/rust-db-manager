@@ -363,15 +363,19 @@
     <div role="tabpanel" id="panel-compare" aria-labelledby="tab-compare" tabindex="0">
       <div class="panel-box">
         <h2 style="margin-block-start:0;">Compare Structure &amp; Detect Cross-Client Contamination</h2>
+        <div id="noDbsBannerCompare" class="status-toast" style="border-color:var(--warning);" hidden>
+          <strong>No user databases found on this SQL Server instance yet.</strong>
+          Go to tab <strong>3. Build Clean Baseline / Client DB</strong> first to build <code>DEMO_PROD_BASE</code> and <code>DEMO_CLIENTE_A</code>.
+        </div>
         <div class="grid-2">
           <div>
             <div class="form-group">
-              <label for="cmpSourceDb">Source Reference Database (e.g. PROD_BASE):</label>
-              <input type="text" id="cmpSourceDb" list="dbListDatalist" placeholder="DEMO_PROD_BASE" value="DEMO_PROD_BASE" />
+              <label for="cmpSourceDb">Source Reference Database (Base to compare against):</label>
+              <select id="cmpSourceDb"></select>
             </div>
             <div class="form-group">
-              <label for="cmpTargetDb">Target Database to Audit (e.g. CLIENTE_A_DB):</label>
-              <input type="text" id="cmpTargetDb" list="dbListDatalist" placeholder="DEMO_CLIENTE_A" value="DEMO_CLIENTE_A" />
+              <label for="cmpTargetDb">Target Database to Audit (Client or Dev DB):</label>
+              <select id="cmpTargetDb"></select>
             </div>
           </div>
           <div>
@@ -397,8 +401,8 @@
               <tr>
                 <th>Object</th>
                 <th>Type</th>
+                <th>Where Does It Exist? (Presence)</th>
                 <th>Classification</th>
-                <th>Attribution</th>
                 <th>Details &amp; Unified Code Diff</th>
               </tr>
             </thead>
@@ -411,36 +415,46 @@
     <!-- PANEL 2: COPY & CLONE DATABASE -->
     <div role="tabpanel" id="panel-copy" aria-labelledby="tab-copy" hidden="until-found">
       <div class="panel-box">
-        <h2 style="margin-block-start:0;">Copy or Clone a Database</h2>
+        <h2 style="margin-block-start:0;">Copy or Clone an Existing Database</h2>
         <p style="color:var(--text-muted);margin-block-start:0;">
-          Create a physical copy via <code>BACKUP DATABASE ... WITH COPY_ONLY</code> + <code>RESTORE ... WITH MOVE</code>, or extract a schema-only clone via DACPAC.
+          Select which existing database on your SQL Server you want to copy, see the exact operation preview below, and execute with one click.
         </p>
+
+        <div id="noDbsBannerCopy" class="status-toast" style="border-color:var(--warning);" hidden>
+          <strong>Your SQL Server currently has 0 user databases to copy.</strong>
+          Click on tab <strong>3. Build Clean Baseline / Client DB</strong> to create a database first, or click <em>Refresh Databases</em> in the top bar.
+        </div>
+
         <div class="grid-2">
           <div>
             <div class="form-group">
-              <label for="copyMode">Copy Modality:</label>
-              <select id="copyMode">
-                <option value="backup-restore">Physical Backup &amp; Restore (Structure + Data, COPY_ONLY)</option>
-                <option value="schema-clone">Schema-Only Clone (via SqlPackage DACPAC)</option>
-              </select>
+              <label for="copySourceDb">1. Source Database to Copy (Existing DB on SQL Server):</label>
+              <select id="copySourceDb"></select>
             </div>
             <div class="form-group">
-              <label for="copySourceDb">Source Database:</label>
-              <input type="text" id="copySourceDb" list="dbListDatalist" placeholder="DEMO_CLIENTE_A" />
+              <label for="copyMode">2. Copy Modality:</label>
+              <select id="copyMode">
+                <option value="backup-restore">Physical Backup &amp; Restore (Full Structure + Data via COPY_ONLY)</option>
+                <option value="schema-clone">Schema-Only Clone (Structure without Data via SqlPackage DACPAC)</option>
+              </select>
             </div>
           </div>
           <div>
             <div class="form-group">
-              <label for="copyTargetDb">Target New Database Name:</label>
-              <input type="text" id="copyTargetDb" placeholder="DEMO_CLIENTE_A_COPY" />
+              <label for="copyTargetDb">3. Target New Database Name (New DB that will be created):</label>
+              <input type="text" id="copyTargetDb" placeholder="e.g. DEMO_CLIENTE_A_COPY" />
             </div>
             <div class="form-group">
-              <label for="copyClientTag">Optional Client Metadata Stamp:</label>
+              <label for="copyClientTag">4. Optional Client Metadata Stamp:</label>
               <select id="copyClientTag"></select>
             </div>
           </div>
         </div>
+
+        <div id="copyOperationPreview" class="status-toast" style="border-color:var(--brand);margin-block-top:0.5rem;"></div>
+
         <button type="button" class="primary" id="btnRunCopy">Execute Database Copy</button>
+        <pre id="copyReceiptLog" class="code-diff" hidden></pre>
       </div>
     </div>
 
@@ -469,7 +483,7 @@
           <div>
             <div class="form-group">
               <label for="buildTargetDb">Target Database Name to Create / Rebuild:</label>
-              <input type="text" id="buildTargetDb" value="DEMO_CLIENTE_A" />
+              <input type="text" id="buildTargetDb" value="DEMO_PROD_BASE" />
             </div>
             <div class="form-group" style="flex-direction:row;align-items:center;gap:0.5rem;margin-block-start:1.4rem;">
               <input type="checkbox" id="buildDropExisting" checked />
@@ -491,8 +505,8 @@
         <h2 style="margin-block-start:0;">Live Databases &amp; Schema Inventory Inspector</h2>
         <div style="display:flex;gap:0.75rem;align-items:flex-end;flex-wrap:wrap;margin-block-end:1rem;">
           <div class="form-group" style="margin:0;min-inline-size:280px;">
-            <label for="inspectDbName">Select Database to Inspect:</label>
-            <input type="text" id="inspectDbName" list="dbListDatalist" placeholder="Select or type database name" />
+            <label for="inspectDbName">Select Online Database to Inspect:</label>
+            <select id="inspectDbName"></select>
           </div>
           <button type="button" class="primary" id="btnRunInspect">Inspect Tables, SPs &amp; History</button>
         </div>
@@ -625,30 +639,102 @@
       }
     }
 
+    function updateCopyPreview() {
+      const src = document.getElementById('copySourceDb').value;
+      const tgt = document.getElementById('copyTargetDb').value.trim();
+      const mode = document.getElementById('copyMode').value;
+      const preview = document.getElementById('copyOperationPreview');
+      const btn = document.getElementById('btnRunCopy');
+
+      if (!src) {
+        preview.textContent = 'No source database available on SQL Server yet. Build one in tab 3 first.';
+        btn.disabled = true;
+        return;
+      }
+
+      btn.disabled = !tgt;
+      const modeDesc = mode === 'backup-restore'
+        ? 'Physical BACKUP DATABASE WITH COPY_ONLY + RESTORE WITH MOVE (copies full structure + data)'
+        : 'SqlPackage DACPAC Extract & Publish (copies structure only, 0 transactional rows)';
+      preview.innerHTML = `<strong>Operation Summary:</strong> Will copy existing database <code>[${escapeHtml(src)}]</code> &rarr; into new database <code>[${escapeHtml(tgt || '...')}]</code> using <em>${escapeHtml(modeDesc)}</em>.`;
+    }
+
     async function testAndLoadDatabases() {
       const profile = document.getElementById('profileSelect').value;
       const badge = document.getElementById('connStatusBadge');
       try {
         const data = await apiGet(`/api/databases?profile=${encodeURIComponent(profile)}`);
+        const dbs = data.databases || [];
         badge.className = 'badge ok';
-        badge.textContent = `Connected (${data.databases.length} DBs)`;
+        badge.textContent = `Connected (${dbs.length} DBs)`;
 
-        const dl = document.getElementById('dbListDatalist');
-        dl.innerHTML = '';
-        data.databases.forEach(db => {
-          const opt = document.createElement('option');
-          opt.value = db;
-          dl.appendChild(opt);
+        const hasNoDbs = dbs.length === 0;
+        document.getElementById('noDbsBannerCompare').hidden = !hasNoDbs;
+        document.getElementById('noDbsBannerCopy').hidden = !hasNoDbs;
+
+        const dbSelectIds = ['cmpSourceDb', 'cmpTargetDb', 'copySourceDb', 'inspectDbName'];
+        dbSelectIds.forEach(id => {
+          const sel = document.getElementById(id);
+          const prev = sel.value;
+          sel.innerHTML = '';
+          if (hasNoDbs) {
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = '-- No user databases on server (create one in Tab 3) --';
+            sel.appendChild(opt);
+          } else {
+            dbs.forEach(db => {
+              const opt = document.createElement('option');
+              opt.value = db;
+              opt.textContent = db;
+              sel.appendChild(opt);
+            });
+            if (prev && dbs.includes(prev)) {
+              sel.value = prev;
+            }
+          }
         });
-        if (data.databases.length > 0 && !document.getElementById('inspectDbName').value) {
-          document.getElementById('inspectDbName').value = data.databases[0];
+
+        // Smart defaults when multiple databases exist
+        if (dbs.length >= 2) {
+          if (dbs.includes('DEMO_PROD_BASE')) {
+            document.getElementById('cmpSourceDb').value = 'DEMO_PROD_BASE';
+          }
+          const nonBase = dbs.find(d => d !== document.getElementById('cmpSourceDb').value);
+          if (nonBase) {
+            document.getElementById('cmpTargetDb').value = nonBase;
+          }
         }
+
+        // Auto-suggest target copy name when source DB is selected
+        const copySrc = document.getElementById('copySourceDb').value;
+        const copyTgtInput = document.getElementById('copyTargetDb');
+        if (copySrc && !copyTgtInput.value) {
+          copyTgtInput.value = `${copySrc}_COPY`;
+        }
+        updateCopyPreview();
       } catch (err) {
         badge.className = 'badge critical';
         badge.textContent = 'Connection Failed';
         showToast(`Profile '${profile}': ${err.message}`, true);
       }
     }
+
+    document.getElementById('copySourceDb').addEventListener('change', (e) => {
+      const src = e.target.value;
+      if (src) {
+        document.getElementById('copyTargetDb').value = `${src}_COPY`;
+      }
+      updateCopyPreview();
+    });
+    document.getElementById('copyTargetDb').addEventListener('input', updateCopyPreview);
+    document.getElementById('copyMode').addEventListener('change', updateCopyPreview);
+    document.getElementById('buildClient').addEventListener('change', (e) => {
+      const cid = e.target.value;
+      document.getElementById('buildTargetDb').value = cid
+        ? `DEMO_${cid.toUpperCase().replaceAll('-', '_')}`
+        : 'DEMO_PROD_BASE';
+    });
 
     document.getElementById('btnTestConn').addEventListener('click', async () => {
       const profile = document.getElementById('profileSelect').value;
@@ -710,21 +796,32 @@
 
     document.getElementById('btnRunCopy').addEventListener('click', async () => {
       const btn = document.getElementById('btnRunCopy');
+      const receiptBox = document.getElementById('copyReceiptLog');
       btn.disabled = true;
       try {
         const res = await apiPost('/api/db/copy', {
           profile: document.getElementById('profileSelect').value,
           mode: document.getElementById('copyMode').value,
           source: document.getElementById('copySourceDb').value,
-          target: document.getElementById('copyTargetDb').value,
+          target: document.getElementById('copyTargetDb').value.trim(),
           client: document.getElementById('copyClientTag').value || null
         });
+        receiptBox.hidden = false;
+        receiptBox.textContent =
+          `COPY COMPLETED SUCCESSFULLY:\n` +
+          `  • Source Database : ${document.getElementById('copySourceDb').value}\n` +
+          `  • Target Database : ${document.getElementById('copyTargetDb').value.trim()}\n` +
+          `  • Mode Used       : ${res.mode_used}\n` +
+          `  • Provenance      : ${res.provenance}\n` +
+          (res.artifact_path ? `  • Backup Artifact : ${res.artifact_path}\n` : '');
         showToast(`${res.message} (${res.provenance})`);
         await testAndLoadDatabases();
       } catch (err) {
+        receiptBox.hidden = false;
+        receiptBox.textContent = `COPY FAILED:\n${err.message}`;
         showToast(err.message, true);
       } finally {
-        btn.disabled = false;
+        updateCopyPreview();
       }
     });
 
@@ -765,14 +862,27 @@
             else if (d.classification === 'UNEXPLAINED_MANUAL_DRIFT') badgeClass = 'badge warning';
             else if (d.classification === 'EXPLAINED_BY_MIGRATION') badgeClass = 'badge ok';
 
+            let presenceBadge = '';
+            if (d.diff_kind === 'MISSING_IN_TARGET') {
+              presenceBadge = `<span class="badge warning">ONLY IN SOURCE (${escapeHtml(report.source_database)})</span><div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.25rem;">Missing in Target (${escapeHtml(report.target_database)})</div>`;
+            } else if (d.diff_kind === 'EXTRA_IN_TARGET') {
+              presenceBadge = `<span class="badge critical">ONLY IN TARGET (${escapeHtml(report.target_database)})</span><div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.25rem;">Not in Source (${escapeHtml(report.source_database)})</div>`;
+            } else {
+              presenceBadge = `<span class="badge ok">EXISTS IN BOTH DBs</span><div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.25rem;">Modified between ${escapeHtml(report.source_database)} &amp; ${escapeHtml(report.target_database)}</div>`;
+            }
+
+            const attributionNote = d.attributed_migration_id
+              ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.25rem;">Migration: ${escapeHtml(d.attributed_migration_id)} ${d.attributed_client_id ? '(' + escapeHtml(d.attributed_client_id) + ')' : ''}</div>`
+              : '';
+
             const detailsHtml = d.details.map(item => `<div>• ${escapeHtml(item)}</div>`).join('');
             const diffHtml = d.unified_diff ? `<pre class="code-diff">${escapeHtml(d.unified_diff)}</pre>` : '';
 
             tr.innerHTML = `
               <th>${escapeHtml(d.object_name)}</th>
               <td>${escapeHtml(d.object_type)}</td>
-              <td><span class="${badgeClass}">${escapeHtml(d.classification)}</span></td>
-              <td>${escapeHtml(d.attributed_migration_id || 'UNTRACKED')} ${d.attributed_client_id ? '(' + escapeHtml(d.attributed_client_id) + ')' : ''}</td>
+              <td>${presenceBadge}</td>
+              <td><span class="${badgeClass}">${escapeHtml(d.classification)}</span>${attributionNote}</td>
               <td><strong>${escapeHtml(d.summary)}</strong>${detailsHtml}${diffHtml}</td>
             `;
             tbody.appendChild(tr);

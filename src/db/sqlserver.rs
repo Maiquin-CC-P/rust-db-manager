@@ -316,10 +316,42 @@ impl DatabaseEnginePort for SqlServerAdapter {
             .to_string();
 
         let separator = if data_dir.contains('\\') { '\\' } else { '/' };
+
+        // Check if `default_backup_dir` actually exists on the SQL Server host via sys.dm_os_file_exists.
+        // On some installations (like MSSQL16.MIKI_VS), `MSSQL\Backup` does not exist and the service
+        // account lacks permission to create directories in `MSSQL\`, whereas `data_dir` (`MSSQL\DATA`)
+        // always exists and is writable by the SQL Server service account.
+        let mut effective_backup_dir = default_backup_dir.trim_end_matches(['\\', '/']).to_string();
+        let dir_check_sql = format!(
+            "SELECT file_is_a_directory FROM sys.dm_os_file_exists(N'{}');",
+            effective_backup_dir.replace('\'', "''")
+        );
+        if let Ok(stream) = client.simple_query(dir_check_sql).await {
+            if let Ok(rows) = stream.into_first_result().await {
+                let exists = rows
+                    .first()
+                    .and_then(|r| {
+                        r.try_get::<i32, _>("file_is_a_directory")
+                            .ok()
+                            .flatten()
+                            .map(|v| v == 1)
+                            .or_else(|| {
+                                r.try_get::<bool, _>("file_is_a_directory")
+                                    .ok()
+                                    .flatten()
+                            })
+                    })
+                    .unwrap_or(false);
+                if !exists {
+                    effective_backup_dir = data_dir.clone();
+                }
+            }
+        }
+
         let timestamp = Utc::now().format("%Y%m%d_%H%M%S");
         let backup_file = format!(
             "{}{}{}_copy_{}.bak",
-            default_backup_dir.trim_end_matches(['\\', '/']),
+            effective_backup_dir,
             separator,
             source_db,
             timestamp

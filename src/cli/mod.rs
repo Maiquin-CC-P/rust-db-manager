@@ -18,11 +18,39 @@ pub struct Cli {
     pub config: PathBuf,
 
     #[command(subcommand)]
-    pub command: Commands,
+    pub command: Option<Commands>,
 }
 
 #[derive(Debug, Subcommand)]
 pub enum Commands {
+    /// Launch RustDB Manager Studio in a Desktop App Window (or browser)
+    Ui {
+        /// Catalog directory path
+        #[arg(long, default_value = "tests/fixtures/catalog")]
+        catalog: PathBuf,
+
+        /// Host address to bind
+        #[arg(long, default_value = "127.0.0.1")]
+        host: String,
+
+        /// Port to bind
+        #[arg(long, default_value_t = 3080)]
+        port: u16,
+    },
+    /// Run RustDB Manager Studio as a headless Web Server (for personal/LAN server hosting)
+    Serve {
+        /// Catalog directory path
+        #[arg(long, default_value = "tests/fixtures/catalog")]
+        catalog: PathBuf,
+
+        /// Host address to bind (default 0.0.0.0 for LAN/server access)
+        #[arg(long, default_value = "0.0.0.0")]
+        host: String,
+
+        /// Port to bind
+        #[arg(long, default_value_t = 3080)]
+        port: u16,
+    },
     /// Test database connectivity and inspect server version
     Connection {
         #[command(subcommand)]

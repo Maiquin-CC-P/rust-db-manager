@@ -14,7 +14,9 @@ use rustdb_manager::domain::error::DomainError;
 use rustdb_manager::domain::manifest::{resolve_migration_plan, EngineKind, MigrationManifest};
 use rustdb_manager::ports::{CopyMode, DatabaseEnginePort};
 use rustdb_manager::report::{render_report_json, render_report_markdown};
+use rustdb_manager::ui::start_ui_server;
 use std::fs;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
@@ -41,7 +43,27 @@ async fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
-    match cli.command {
+    let command = cli.command.unwrap_or_else(|| Commands::Ui {
+        catalog: PathBuf::from("tests/fixtures/catalog"),
+        host: "127.0.0.1".to_string(),
+        port: 3080,
+    });
+
+    match command {
+        Commands::Ui {
+            catalog,
+            host,
+            port,
+        } => {
+            start_ui_server(cli.config, catalog, &host, port, true).await?;
+        }
+        Commands::Serve {
+            catalog,
+            host,
+            port,
+        } => {
+            start_ui_server(cli.config, catalog, &host, port, false).await?;
+        }
         Commands::Connection { action } => match action {
             ConnectionCommands::Test { profile } => {
                 let prof = load_connection_profile(&cli.config, &profile)?;

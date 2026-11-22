@@ -116,7 +116,9 @@ async fn api_status(State(state): State<UiAppState>) -> impl IntoResponse {
             profiles.sort();
         }
     }
-    let default_profile = if profiles.iter().any(|p| p == "local_windows_auth") {
+    let default_profile = if profiles.iter().any(|p| p == "miki_vs_windows_auth") {
+        "miki_vs_windows_auth".to_string()
+    } else if profiles.iter().any(|p| p == "local_windows_auth") {
         "local_windows_auth".to_string()
     } else {
         profiles

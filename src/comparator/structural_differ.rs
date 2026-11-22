@@ -13,11 +13,15 @@ pub fn compute_raw_schema_differences(
     target: &DatabaseSchemaInventory,
 ) -> Vec<ObjectDifference> {
     let mut diffs = Vec::new();
+    let src_db = &source.database_name;
+    let tgt_db = &target.database_name;
 
     // 1. Compare Tables
     for (table_key, src_table) in &source.tables {
         match target.tables.get(table_key) {
             None => {
+                let col_names: Vec<String> =
+                    src_table.columns.values().map(|c| c.name.clone()).collect();
                 diffs.push(ObjectDifference {
                     object_type: "TABLE".to_string(),
                     object_name: src_table.full_name(),
@@ -27,20 +31,19 @@ pub fn compute_raw_schema_differences(
                     attributed_migration_id: None,
                     attributed_client_id: None,
                     summary: format!(
-                        "Table '{}' exists in source '{}' but is MISSING in target '{}'",
+                        "[ONLY IN SOURCE '{src_db}'] Table '{}' exists in Source '{src_db}', but is MISSING in Target '{tgt_db}'",
                         src_table.full_name(),
-                        source.database_name,
-                        target.database_name
                     ),
                     details: vec![format!(
-                        "Expected table with {} columns",
-                        src_table.columns.len()
+                        "Present in '{src_db}' ({} columns: {}) | Missing in '{tgt_db}'",
+                        src_table.columns.len(),
+                        col_names.join(", ")
                     )],
                     unified_diff: None,
                 });
             }
             Some(tgt_table) => {
-                compare_table_internals(src_table, tgt_table, &mut diffs);
+                compare_table_internals(src_db, tgt_db, src_table, tgt_table, &mut diffs);
             }
         }
     }
@@ -48,7 +51,8 @@ pub fn compute_raw_schema_differences(
     // Extra tables in Target that do not exist in Source
     for (table_key, tgt_table) in &target.tables {
         if !source.tables.contains_key(table_key) {
-            let col_names: Vec<String> = tgt_table.columns.values().map(|c| c.name.clone()).collect();
+            let col_names: Vec<String> =
+                tgt_table.columns.values().map(|c| c.name.clone()).collect();
             diffs.push(ObjectDifference {
                 object_type: "TABLE".to_string(),
                 object_name: tgt_table.full_name(),
@@ -58,12 +62,14 @@ pub fn compute_raw_schema_differences(
                 attributed_migration_id: None,
                 attributed_client_id: None,
                 summary: format!(
-                    "Extra table '{}' found in target '{}' (not present in source '{}')",
+                    "[ONLY IN TARGET '{tgt_db}'] Table '{}' exists in Target '{tgt_db}', but does NOT exist in Source '{src_db}'",
                     tgt_table.full_name(),
-                    target.database_name,
-                    source.database_name
                 ),
-                details: vec![format!("Columns: {}", col_names.join(", "))],
+                details: vec![format!(
+                    "Present in '{tgt_db}' ({} columns: {}) | Not in '{src_db}'",
+                    tgt_table.columns.len(),
+                    col_names.join(", ")
+                )],
                 unified_diff: None,
             });
         }
@@ -82,13 +88,12 @@ pub fn compute_raw_schema_differences(
                     attributed_migration_id: None,
                     attributed_client_id: None,
                     summary: format!(
-                        "{} '{}' is MISSING in target '{}'",
+                        "[ONLY IN SOURCE '{src_db}'] {} '{}' exists in Source '{src_db}', but is MISSING in Target '{tgt_db}'",
                         src_obj.kind,
                         src_obj.full_name(),
-                        target.database_name
                     ),
-                    details: vec![format!("Source SHA-256: {}", src_obj.semantic_sha256)],
-                    unified_diff: None,
+                    details: vec![format!("Present in '{src_db}' (SHA-256: {}) | Missing in '{tgt_db}'", src_obj.semantic_sha256)],
+                    unified_diff: Some(src_obj.raw_definition.clone()),
                 });
             }
             Some(tgt_obj) => {
@@ -97,8 +102,8 @@ pub fn compute_raw_schema_differences(
                     let udiff = build_unified_text_diff(
                         &src_obj.raw_definition,
                         &tgt_obj.raw_definition,
-                        &format!("source/{}", src_obj.full_name()),
-                        &format!("target/{}", tgt_obj.full_name()),
+                        &format!("SOURCE ({src_db})/{}", src_obj.full_name()),
+                        &format!("TARGET ({tgt_db})/{}", tgt_obj.full_name()),
                     );
 
                     if is_semantic_match {
@@ -111,12 +116,12 @@ pub fn compute_raw_schema_differences(
                             attributed_migration_id: None,
                             attributed_client_id: None,
                             summary: format!(
-                                "{} '{}' has whitespace/comment-only differences (semantic T-SQL matches)",
+                                "[BOTH DBs - FORMATTING ONLY] {} '{}' has comment/whitespace differences between '{src_db}' and '{tgt_db}'",
                                 src_obj.kind,
                                 src_obj.full_name()
                             ),
                             details: vec![format!(
-                                "Semantic SHA-256 matches: {}",
+                                "Executable T-SQL matches in both '{src_db}' and '{tgt_db}' (SHA-256: {})",
                                 src_obj.semantic_sha256
                             )],
                             unified_diff: Some(udiff),
@@ -131,14 +136,13 @@ pub fn compute_raw_schema_differences(
                             attributed_migration_id: None,
                             attributed_client_id: None,
                             summary: format!(
-                                "{} '{}' definition was MODIFIED in target '{}'",
+                                "[MODIFIED IN BOTH] {} '{}' exists in both '{src_db}' and '{tgt_db}', but its SQL code differs",
                                 src_obj.kind,
                                 src_obj.full_name(),
-                                target.database_name
                             ),
                             details: vec![
-                                format!("Source Semantic SHA-256: {}", src_obj.semantic_sha256),
-                                format!("Target Semantic SHA-256: {}", tgt_obj.semantic_sha256),
+                                format!("Lines with '-' belong to SOURCE '{src_db}' (SHA-256: {})", &src_obj.semantic_sha256[..16]),
+                                format!("Lines with '+' belong to TARGET '{tgt_db}' (SHA-256: {})", &tgt_obj.semantic_sha256[..16]),
                             ],
                             unified_diff: Some(udiff),
                         });
@@ -160,13 +164,11 @@ pub fn compute_raw_schema_differences(
                 attributed_migration_id: None,
                 attributed_client_id: None,
                 summary: format!(
-                    "Extra {} '{}' found in target '{}' (not in source '{}')",
+                    "[ONLY IN TARGET '{tgt_db}'] {} '{}' exists in Target '{tgt_db}', but does NOT exist in Source '{src_db}'",
                     tgt_obj.kind,
                     tgt_obj.full_name(),
-                    target.database_name,
-                    source.database_name
                 ),
-                details: vec![format!("Target Semantic SHA-256: {}", tgt_obj.semantic_sha256)],
+                details: vec![format!("Present in '{tgt_db}' (SHA-256: {}) | Not in '{src_db}'", tgt_obj.semantic_sha256)],
                 unified_diff: Some(tgt_obj.raw_definition.clone()),
             });
         }
@@ -176,6 +178,8 @@ pub fn compute_raw_schema_differences(
 }
 
 fn compare_table_internals(
+    src_db: &str,
+    tgt_db: &str,
     src: &TableInventory,
     tgt: &TableInventory,
     diffs: &mut Vec<ObjectDifference>,
@@ -187,13 +191,13 @@ fn compare_table_internals(
         match tgt.columns.get(col_key) {
             None => {
                 structural_notes.push(format!(
-                    "Missing column [{}] ({})",
+                    "[ONLY IN SOURCE '{src_db}' | MISSING IN TARGET '{tgt_db}'] Column [{}] ({})",
                     src_col.name,
                     format_column_type(src_col)
                 ));
             }
             Some(tgt_col) => {
-                let col_diffs = compare_columns(src_col, tgt_col);
+                let col_diffs = compare_columns(src_db, tgt_db, src_col, tgt_col);
                 structural_notes.extend(col_diffs);
             }
         }
@@ -202,7 +206,7 @@ fn compare_table_internals(
     for (col_key, tgt_col) in &tgt.columns {
         if !src.columns.contains_key(col_key) {
             structural_notes.push(format!(
-                "Extra column [{}] ({})",
+                "[ONLY IN TARGET '{tgt_db}' | NOT IN SOURCE '{src_db}'] Column [{}] ({})",
                 tgt_col.name,
                 format_column_type(tgt_col)
             ));
@@ -214,7 +218,7 @@ fn compare_table_internals(
         match tgt.indexes.get(idx_key) {
             None => {
                 structural_notes.push(format!(
-                    "Missing index [{}] (keys: {})",
+                    "[ONLY IN SOURCE '{src_db}' | MISSING IN TARGET '{tgt_db}'] Index [{}] (keys: {})",
                     src_idx.name,
                     src_idx.key_columns.join(", ")
                 ));
@@ -222,7 +226,7 @@ fn compare_table_internals(
             Some(tgt_idx) => {
                 if src_idx != tgt_idx {
                     structural_notes.push(format!(
-                        "Modified index [{}]: source keys=({:?}, unique={}) vs target keys=({:?}, unique={})",
+                        "[DIFFERENT IN BOTH] Index [{}]: in '{src_db}' keys=({:?}, unique={}) vs in '{tgt_db}' keys=({:?}, unique={})",
                         src_idx.name,
                         src_idx.key_columns,
                         src_idx.is_unique,
@@ -236,7 +240,7 @@ fn compare_table_internals(
     for (idx_key, tgt_idx) in &tgt.indexes {
         if !src.indexes.contains_key(idx_key) {
             structural_notes.push(format!(
-                "Extra index [{}] (keys: {})",
+                "[ONLY IN TARGET '{tgt_db}' | NOT IN SOURCE '{src_db}'] Index [{}] (keys: {})",
                 tgt_idx.name,
                 tgt_idx.key_columns.join(", ")
             ));
@@ -248,14 +252,14 @@ fn compare_table_internals(
         match tgt.foreign_keys.get(fk_key) {
             None => {
                 structural_notes.push(format!(
-                    "Missing foreign key [{}] -> {}",
+                    "[ONLY IN SOURCE '{src_db}' | MISSING IN TARGET '{tgt_db}'] Foreign Key [{}] -> {}",
                     src_fk.name, src_fk.referenced_table
                 ));
             }
             Some(tgt_fk) => {
                 if src_fk != tgt_fk {
                     structural_notes.push(format!(
-                        "Modified foreign key [{}]: source={:?} vs target={:?}",
+                        "[DIFFERENT IN BOTH] Foreign Key [{}]: in '{src_db}'={:?} vs in '{tgt_db}'={:?}",
                         src_fk.name, src_fk.columns, tgt_fk.columns
                     ));
                 }
@@ -265,7 +269,7 @@ fn compare_table_internals(
     for (fk_key, tgt_fk) in &tgt.foreign_keys {
         if !src.foreign_keys.contains_key(fk_key) {
             structural_notes.push(format!(
-                "Extra foreign key [{}] -> {}",
+                "[ONLY IN TARGET '{tgt_db}' | NOT IN SOURCE '{src_db}'] Foreign Key [{}] -> {}",
                 tgt_fk.name, tgt_fk.referenced_table
             ));
         }
@@ -274,10 +278,13 @@ fn compare_table_internals(
     // D. Check Constraints
     for (cc_key, src_cc) in &src.check_constraints {
         match tgt.check_constraints.get(cc_key) {
-            None => structural_notes.push(format!("Missing check constraint [{}]", src_cc.name)),
+            None => structural_notes.push(format!(
+                "[ONLY IN SOURCE '{src_db}' | MISSING IN TARGET '{tgt_db}'] Check Constraint [{}]",
+                src_cc.name
+            )),
             Some(tgt_cc) if src_cc.definition != tgt_cc.definition => {
                 structural_notes.push(format!(
-                    "Modified check constraint [{}]: '{}' vs '{}'",
+                    "[DIFFERENT IN BOTH] Check Constraint [{}]: in '{src_db}'='{}' vs in '{tgt_db}'='{}'",
                     src_cc.name, src_cc.definition, tgt_cc.definition
                 ));
             }
@@ -287,7 +294,7 @@ fn compare_table_internals(
     for (cc_key, tgt_cc) in &tgt.check_constraints {
         if !src.check_constraints.contains_key(cc_key) {
             structural_notes.push(format!(
-                "Extra check constraint [{}]: {}",
+                "[ONLY IN TARGET '{tgt_db}' | NOT IN SOURCE '{src_db}'] Check Constraint [{}]: {}",
                 tgt_cc.name, tgt_cc.definition
             ));
         }
@@ -303,7 +310,7 @@ fn compare_table_internals(
             attributed_migration_id: None,
             attributed_client_id: None,
             summary: format!(
-                "Table '{}' structure differs ({} structural change(s))",
+                "Table '{}' exists in both '{src_db}' and '{tgt_db}', with {} difference(s)",
                 src.full_name(),
                 structural_notes.len()
             ),
@@ -313,7 +320,12 @@ fn compare_table_internals(
     }
 }
 
-fn compare_columns(src: &ColumnInventory, tgt: &ColumnInventory) -> Vec<String> {
+fn compare_columns(
+    src_db: &str,
+    tgt_db: &str,
+    src: &ColumnInventory,
+    tgt: &ColumnInventory,
+) -> Vec<String> {
     let mut notes = Vec::new();
     if !src.data_type.eq_ignore_ascii_case(&tgt.data_type)
         || src.max_length != tgt.max_length
@@ -321,7 +333,7 @@ fn compare_columns(src: &ColumnInventory, tgt: &ColumnInventory) -> Vec<String> 
         || src.scale != tgt.scale
     {
         notes.push(format!(
-            "Column [{}] type mismatch: source={} vs target={}",
+            "[DIFFERENT TYPE] Column [{}]: in '{src_db}' is {} vs in '{tgt_db}' is {}",
             src.name,
             format_column_type(src),
             format_column_type(tgt)
@@ -329,13 +341,13 @@ fn compare_columns(src: &ColumnInventory, tgt: &ColumnInventory) -> Vec<String> 
     }
     if src.is_nullable != tgt.is_nullable {
         notes.push(format!(
-            "Column [{}] nullability mismatch: source is_nullable={} vs target is_nullable={}",
+            "[DIFFERENT NULLABILITY] Column [{}]: in '{src_db}' is_nullable={} vs in '{tgt_db}' is_nullable={}",
             src.name, src.is_nullable, tgt.is_nullable
         ));
     }
     if src.default_definition != tgt.default_definition {
         notes.push(format!(
-            "Column [{}] default mismatch: source={:?} vs target={:?}",
+            "[DIFFERENT DEFAULT] Column [{}]: in '{src_db}' default={:?} vs in '{tgt_db}' default={:?}",
             src.name, src.default_definition, tgt.default_definition
         ));
     }

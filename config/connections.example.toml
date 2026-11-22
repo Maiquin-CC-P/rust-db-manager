@@ -2,6 +2,30 @@
 # Copy this file to `config/connections.toml` and set passwords via environment variables.
 # NEVER commit plaintext passwords to Git.
 
+[profiles.miki_vs_windows_auth]
+engine = "sqlserver"
+host = "localhost"
+port = 1435
+database = "master"
+trust_server_certificate = true
+integrated_auth = true
+
+[profiles.sqlexpress_windows_auth]
+engine = "sqlserver"
+host = "localhost"
+port = 1433
+database = "master"
+trust_server_certificate = true
+integrated_auth = true
+
+[profiles.local_windows_auth]
+engine = "sqlserver"
+host = "localhost"
+port = 1433
+database = "master"
+trust_server_certificate = true
+integrated_auth = true
+
 [profiles.local]
 engine = "sqlserver"
 host = "localhost"
@@ -11,14 +35,6 @@ user = "sa"
 password_env = "RUSTDB_SQL_PASSWORD"
 trust_server_certificate = true
 integrated_auth = false
-
-[profiles.local_windows_auth]
-engine = "sqlserver"
-host = "localhost"
-port = 1433
-database = "master"
-trust_server_certificate = true
-integrated_auth = true
 
 [profiles.local_mysql]
 engine = "mysql"
